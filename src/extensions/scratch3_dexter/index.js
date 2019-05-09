@@ -18,10 +18,24 @@ class Dexter {
          * @private
          */
         this._runtime = runtime;
-        
+
         this.newSock();
+
+        /**
+         * The last status data Dexter sent.
+         * @type {DataView}
+         * @private
+         */
+        this._status = new DataView(new ArrayBuffer(60 * 4)); // 60 addresses, 32-bit int each
+
+        /**
+         * The next instruction number to send to Dexter.
+         * @type {int}
+         * @private
+         */
+        this._count = 0;
     }
-    
+
     getInfo () {
         return {
             id: 'scratchDexter',
@@ -194,7 +208,7 @@ class Dexter {
         if (this._ws) return;
         this.newSock();
     }
-    
+
     onClose (evt) {
         console.log('closed');
         try {
@@ -208,15 +222,126 @@ class Dexter {
             self._ws = null;
         }
     }
-    
+
     onData (msg) {
         this._status = new DataView(msg.data);
         console.log(this.get_last_oplet() + ' errored: ' + this.get_last_errored());
     }
-    
+
     onOpen () {
         console.log('connected');
         this.get_robot_status();
     }
-    
-    
+
+    make_ins (args) {
+        console.log(args.CMD);
+        this.checkSock();
+        this._ws.send("1 " + (this._count++) + " 1 undefined " + args.CMD + " ;");
+    }
+
+    move_all_joints (args) {
+        console.log('a ' + args.J1 + " " + args.J2 + " " + args.J3 + " " + args.J4 + " " + args.J5);
+        this.checkSock();
+        this._ws.send(
+            "1 "
+            + (this._count++)
+            + " 1 undefined a "
+            + args.J1 * 3600
+            + " " + args.J2 * 3600
+            + " " + args.J3 * 3600
+            + " " + args.J4 * 3600
+            + " " + args.J5 * 3600
+            + " ;"
+        );
+    }
+
+    move_to (args) {
+        console.log('M ' + args.X + ' ' + args.Y + ' ' + args.Z + ' ' + args.X_DIR + ' ' + args.Y_DIR + ' ' + args.Z_DIR + ' ' + args.LEFT_RIGHT + ' ' + args.UP_DOWN + ' ' + args.IN_OUT);
+        this.checkSock();
+        this._ws.send(
+            "1 " + (this._count++) + " 1 undefined M "
+            + args.X * 1000000 + ' ' + args.Y * 1000000 + ' ' + args.Z * 1000000 + ' '
+            + args.X_DIR + ' ' + args.Y_DIR + ' ' + args.Z_DIR + ' '
+            + (0 + (args.LEFT_RIGHT == 'right')) + ' '
+            + (0 + (args.UP_DOWN == 'up')) + ' '
+            + (0 + (args.IN_OUT == 'out')) + ' ;'
+        );
+    }
+
+    pid_move_all_joints (args) {
+        console.log('P', args.J1, args.J2, args.J3, args.J4, args.J5);
+        this.checkSock();
+        this._ws.send(
+            '1 ' + (this._count++) + ' 1 undefined P '
+            + args.J1 * 3600 + " "
+            + args.J2 * 3600 + " "
+            + args.J3 * 3600 + " "
+            + args.J4 * 3600 + " "
+            + args.J5 * 3600 + " ;"
+        );
+    }
+
+    get_robot_status () {
+        console.log('g');
+        this.checkSock();
+        this._ws.send('1 ' + (this._count++) + ' 1 undefined g ;');
+    }
+
+    get_last (args) {
+        return this._status.getInt32({
+            'job number': 00,
+            'instruction number': 01,
+            'start time': 02,
+            'end time': 03
+        }[args.THING] * 4, true);
+    }
+
+    get_last_oplet () {
+        return String.fromCharCode(this._status.getInt32(04 * 4, true));
+    }
+
+    get_last_errored () {
+        return this._status.getInt32(05 * 4, true) > 0;
+    }
+
+    get_joint (args) {
+        return this._status.getInt32(({
+            'position at': 10,
+            'position delta': 11,
+            'position PID delta': 12,
+            'position force delta': 13,
+            'sin': 14,
+            'cos': 15,
+            'measured angle': 16,
+            'sent position': 17
+        }[args.DATA] + {
+            'base': 0,
+            'pivot': 10,
+            'end': 20,
+            'angle': 30,
+            'rot': 40
+        }[args.JOINT]) * 4, true);
+    }
+
+    get_joint_6 (args) {
+        return this._status.getInt32((args.DATA == 'angle' ? 18 : 28) * 4, true);
+    }
+
+    get_joint_7 (args) {
+        return this._status.getInt32((args.DATA == 'position' ? 38 : 48) * 4, true);
+    }
+
+    reload () {
+        console.log('reload');
+        try {
+            this.newSock();
+        } catch (e) {};
+    }
+
+    empty_instruction_queue () {
+        console.log('F');
+        this.checkSock();
+        this._ws.send('1 1 1 undefined F ;');
+    }
+
+}
