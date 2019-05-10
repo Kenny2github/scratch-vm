@@ -4,7 +4,7 @@ const BlockType = require('../../extension-support/block-type');
 /**
  * Manage communication with a Dexter arm over a client WebSocket server.
  */
-class Dexter {
+class Scratch3Dexter {
 
     /**
      * Construct a Dexter communication object.
@@ -289,19 +289,19 @@ class Dexter {
 
     get_last (args) {
         return this._status.getInt32({
-            'job number': 00,
-            'instruction number': 01,
-            'start time': 02,
-            'end time': 03
+            'job number': 0,
+            'instruction number': 1,
+            'start time': 2,
+            'end time': 3
         }[args.THING] * 4, true);
     }
 
     get_last_oplet () {
-        return String.fromCharCode(this._status.getInt32(04 * 4, true));
+        return String.fromCharCode(this._status.getInt32(4 * 4, true));
     }
 
     get_last_errored () {
-        return this._status.getInt32(05 * 4, true) > 0;
+        return this._status.getInt32(5 * 4, true) > 0;
     }
 
     get_joint (args) {
@@ -345,3 +345,4 @@ class Dexter {
     }
 
 }
+module.exports = Scratch3Dexter;
